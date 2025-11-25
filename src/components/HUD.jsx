@@ -75,7 +75,7 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
             {/* --- TOP BAR --- */}
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 240, 255, 0.3)', background: 'rgba(0, 10, 20, 0.8)', pointerEvents: 'auto', padding: '0 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h1 style={{ margin: 0, fontFamily: '"Orbitron", sans-serif', fontSize: '24px', letterSpacing: '2px' }}>NASA LIVE</h1>
+                    <h1 style={{ margin: 0, fontFamily: '"Orbitron", sans-serif', fontSize: '24px', letterSpacing: '2px' }}>COEISMIC</h1>
                     <span style={{ background: '#ff003c', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '2px' }}>UPLINK ACTIVE</span>
                     <span style={{ background: audioState === 'running' ? '#00ff00' : '#ffaa00', color: 'black', padding: '2px 6px', fontSize: '10px', borderRadius: '2px' }}>AUDIO: {audioState?.toUpperCase()}</span>
                 </div>
