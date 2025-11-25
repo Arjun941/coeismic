@@ -8,6 +8,7 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
     const [hoveredKey, setHoveredKey] = useState(null);
     const [selectedInfoKey, setSelectedInfoKey] = useState(null);
     const [showHelp, setShowHelp] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const logEndRef = useRef(null);
 
     const telemetryDescriptions = {
@@ -34,6 +35,13 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
         event_count: "Active natural events tracked by EONET.",
         exo_habitable: "Estimated number of potentially habitable exoplanets."
     };
+
+    // Handle Resize
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // System Logging
     useEffect(() => {
@@ -63,19 +71,33 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            display: 'grid',
+            display: isMobile ? 'flex' : 'grid',
+            flexDirection: 'column',
             gridTemplateColumns: '300px 1fr 400px', // Wider right panel
             gridTemplateRows: '60px 1fr 100px',
-            padding: '20px',
+            padding: isMobile ? '10px' : '20px',
             boxSizing: 'border-box',
             fontFamily: '"Rajdhani", sans-serif',
             color: '#00f0ff',
-            zIndex: 10
+            zIndex: 10,
+            overflow: isMobile ? 'auto' : 'hidden'
         }}>
             {/* --- TOP BAR --- */}
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 240, 255, 0.3)', background: 'rgba(0, 10, 20, 0.8)', pointerEvents: 'auto', padding: '0 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h1 style={{ margin: 0, fontFamily: '"Orbitron", sans-serif', fontSize: '24px', letterSpacing: '2px' }}>COEISMIC</h1>
+            <div style={{
+                gridColumn: '1 / -1',
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                justifyContent: 'space-between',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                borderBottom: '1px solid rgba(0, 240, 255, 0.3)',
+                background: 'rgba(0, 10, 20, 0.8)',
+                pointerEvents: 'auto',
+                padding: isMobile ? '10px' : '0 20px',
+                gap: isMobile ? '10px' : '0',
+                minHeight: isMobile ? 'auto' : '60px'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <h1 style={{ margin: 0, fontFamily: '"Orbitron", sans-serif', fontSize: isMobile ? '20px' : '24px', letterSpacing: '2px' }}>COEISMIC</h1>
                     <span style={{ background: '#ff003c', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '2px' }}>UPLINK ACTIVE</span>
                     <span style={{ background: audioState === 'running' ? '#00ff00' : '#ffaa00', color: 'black', padding: '2px 6px', fontSize: '10px', borderRadius: '2px' }}>AUDIO: {audioState?.toUpperCase()}</span>
                 </div>
@@ -86,16 +108,17 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                        position: 'absolute',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                        position: isMobile ? 'relative' : 'absolute',
+                        left: isMobile ? '0' : '50%',
+                        transform: isMobile ? 'none' : 'translateX(-50%)',
                         color: 'rgba(0, 240, 255, 0.6)',
                         fontSize: '12px',
                         textDecoration: 'none',
                         fontFamily: '"Orbitron", sans-serif',
                         letterSpacing: '2px',
                         transition: 'color 0.3s ease',
-                        pointerEvents: 'auto'
+                        pointerEvents: 'auto',
+                        marginTop: isMobile ? '5px' : '0'
                     }}
                     onMouseEnter={(e) => e.target.style.color = '#00f0ff'}
                     onMouseLeave={(e) => e.target.style.color = 'rgba(0, 240, 255, 0.6)'}
@@ -103,14 +126,16 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                     CREATED BY: OFFSPACE
                 </a>
 
-                <div style={{ display: 'flex', gap: '20px', fontSize: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <Globe size={14} />
-                        <span>EXO: {telemetry.exo_count}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <Satellite size={14} />
-                        <span>TLE: {telemetry.tle_count}</span>
+                <div style={{ display: 'flex', gap: '20px', fontSize: '12px', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Globe size={14} />
+                            <span>EXO: {telemetry.exo_count}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Satellite size={14} />
+                            <span>TLE: {telemetry.tle_count}</span>
+                        </div>
                     </div>
                     <button
                         onClick={() => setShowHelp(true)}
@@ -122,18 +147,29 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
             </div>
 
             {/* --- LEFT PANEL: SYSTEM LOGS --- */}
-            <div style={{ gridColumn: '1', gridRow: '2', marginTop: '20px', background: 'rgba(0, 10, 20, 0.6)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '10px', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', borderBottom: '1px solid rgba(0, 240, 255, 0.2)', paddingBottom: '5px' }}>SYSTEM LOG</h3>
-                <div style={{ flex: 1, overflowY: 'auto', fontSize: '12px', fontFamily: 'monospace', color: '#00f0ff', opacity: 0.8 }}>
-                    {logs.map((log, i) => (
-                        <div key={i} style={{ marginBottom: '4px' }}>{log}</div>
-                    ))}
-                    <div ref={logEndRef} />
+            {!isMobile && (
+                <div style={{ gridColumn: '1', gridRow: '2', marginTop: '20px', background: 'rgba(0, 10, 20, 0.6)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '10px', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', borderBottom: '1px solid rgba(0, 240, 255, 0.2)', paddingBottom: '5px' }}>SYSTEM LOG</h3>
+                    <div style={{ flex: 1, overflowY: 'auto', fontSize: '12px', fontFamily: 'monospace', color: '#00f0ff', opacity: 0.8 }}>
+                        {logs.map((log, i) => (
+                            <div key={i} style={{ marginBottom: '4px' }}>{log}</div>
+                        ))}
+                        <div ref={logEndRef} />
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* --- CENTER: AUDIO VISUALIZER --- */}
-            <div style={{ gridColumn: '2', gridRow: '2', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', padding: '20px' }}>
+            <div style={{
+                gridColumn: '2',
+                gridRow: '2',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                pointerEvents: 'none',
+                padding: '20px',
+                minHeight: isMobile ? '200px' : 'auto'
+            }}>
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <AudioSpectrum />
                     <div style={{ textAlign: 'center', fontSize: '10px', color: 'rgba(0, 240, 255, 0.5)' }}>REAL-TIME FREQUENCY DOMAIN</div>
@@ -141,10 +177,20 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
             </div>
 
             {/* --- RIGHT PANEL: TELEMETRY GRID --- */}
-            <div style={{ gridColumn: '3', gridRow: '2', marginTop: '20px', background: 'rgba(0, 10, 20, 0.8)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '10px', pointerEvents: 'auto', overflowY: 'auto' }}>
+            <div style={{
+                gridColumn: '3',
+                gridRow: '2',
+                marginTop: '20px',
+                background: 'rgba(0, 10, 20, 0.8)',
+                border: '1px solid rgba(0, 240, 255, 0.2)',
+                padding: '10px',
+                pointerEvents: 'auto',
+                overflowY: 'auto',
+                maxHeight: isMobile ? '400px' : 'auto'
+            }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', borderBottom: '1px solid rgba(0, 240, 255, 0.2)', paddingBottom: '5px' }}>TELEMETRY ({Object.keys(telemetry).length})</h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', paddingBottom: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px', paddingBottom: '10px' }}>
                     {Object.keys(telemetry).map(key => (
                         <div
                             key={key}
@@ -159,7 +205,7 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                                 min={0}
                                 max={Math.max(...(history[key] || [100])) * 1.2}
                             />
-                            {hoveredKey === key && (
+                            {(hoveredKey === key || isMobile) && ( // Always show button on mobile if needed, or rely on tap
                                 <button
                                     onClick={() => setSelectedInfoKey(key)}
                                     style={{
@@ -174,7 +220,8 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                                         fontSize: '10px',
                                         fontFamily: '"Orbitron", sans-serif',
                                         cursor: 'pointer',
-                                        zIndex: 10
+                                        zIndex: 10,
+                                        opacity: isMobile ? 0.8 : 1 // Less intrusive on mobile
                                     }}
                                 >
                                     KNOW MORE
@@ -202,7 +249,7 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                     pointerEvents: 'auto'
                 }}>
                     <div style={{
-                        width: '400px',
+                        width: isMobile ? '90%' : '400px',
                         background: 'rgba(0, 10, 20, 0.95)',
                         border: '1px solid #00f0ff',
                         padding: '20px',
@@ -226,7 +273,7 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                             [X]
                         </button>
 
-                        <h2 style={{ margin: '0 0 10px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff' }}>
+                        <h2 style={{ margin: '0 0 10px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff', fontSize: isMobile ? '18px' : '24px' }}>
                             {formatLabel(selectedInfoKey)}
                         </h2>
 
@@ -263,7 +310,9 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                     pointerEvents: 'auto'
                 }}>
                     <div style={{
-                        width: '600px',
+                        width: isMobile ? '90%' : '600px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
                         background: 'rgba(0, 10, 20, 0.95)',
                         border: '1px solid #00f0ff',
                         padding: '40px',
@@ -325,21 +374,34 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
             )}
 
             {/* --- BOTTOM BAR: CONTROLS --- */}
-            <div style={{ gridColumn: '1 / -1', gridRow: '3', display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'auto', gap: '20px', position: 'relative' }}>
+            <div style={{
+                gridColumn: '1 / -1',
+                gridRow: '3',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                pointerEvents: 'auto',
+                gap: '20px',
+                position: 'relative',
+                marginTop: isMobile ? '20px' : '0',
+                paddingBottom: isMobile ? '20px' : '0'
+            }}>
                 <button
                     onClick={onTogglePlay}
                     style={{
                         background: isPlaying ? 'rgba(255, 0, 60, 0.2)' : 'rgba(0, 240, 255, 0.2)',
                         border: `1px solid ${isPlaying ? '#ff003c' : '#00f0ff'}`,
                         color: isPlaying ? '#ff003c' : '#00f0ff',
-                        padding: '10px 40px',
-                        fontSize: '18px',
+                        padding: isMobile ? '15px 30px' : '10px 40px',
+                        fontSize: isMobile ? '16px' : '18px',
                         fontFamily: '"Orbitron", sans-serif',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '10px',
-                        transition: 'all 0.3s ease'
+                        transition: 'all 0.3s ease',
+                        width: isMobile ? '100%' : 'auto',
+                        justifyContent: 'center'
                     }}
                 >
                     {isPlaying ? <Square size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
