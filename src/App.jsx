@@ -82,7 +82,27 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    // Helper function to update specific data source
+    const updateDataSource = async (fetchFn, dataKey, telemetryUpdater, timestampKey) => {
+      try {
+        const data = await fetchFn();
+        if (data) {
+          setTelemetry(prev => ({
+            ...prev,
+            ...telemetryUpdater(data)
+          }));
+          setLastUpdated(prev => ({
+            ...prev,
+            [timestampKey]: new Date()
+          }));
+        }
+      } catch (error) {
+        console.error(`Error fetching ${dataKey}:`, error);
+      }
+    };
+
+    // Initial fetch all data
+    const initData = async () => {
       const results = await Promise.allSettled([
         fetchAPOD(),
         fetchNeoWs(),
@@ -107,12 +127,11 @@ function App() {
       const iss = results[8].value || {};
       const solar = results[9].value || {};
 
-      // Map API results to Telemetry State
       setTelemetry(prev => ({
         ...prev,
         // NEO
         neo_count: neo.neo_count || 0,
-        neo_velocity: (neo.neo_velocity || 0) / 50000, // Normalize
+        neo_velocity: (neo.neo_velocity || 0) / 50000,
         neo_distance: (neo.neo_distance || 0) / 10000000,
         neo_max_diameter: neo.neo_max_diameter || 0,
         neo_min_diameter: neo.neo_min_diameter || 0,
@@ -142,7 +161,7 @@ function App() {
         earth_wind: earthWeather.earth_wind || 0,
         earth_cloud_cover: earthWeather.earth_cloud_cover || 0,
         earth_uv_index: earthWeather.earth_uv_index || 0,
-        // Asteroids (7-day)
+        // Asteroids
         asteroid_approaches_7d: asteroidApproaches.asteroid_approaches_7d || 0,
         asteroid_closest_distance: asteroidApproaches.asteroid_closest_distance || 0,
         asteroid_fastest_velocity: asteroidApproaches.asteroid_fastest_velocity || 0,
@@ -150,7 +169,6 @@ function App() {
         event_count: eonet.length || 0
       }));
 
-      // Update timestamps
       const now = new Date();
       setLastUpdated({
         neo: results[1].status === 'fulfilled' ? now : null,
@@ -167,16 +185,151 @@ function App() {
       setLoading(false);
     };
 
-    // Initial fetch
-    fetchData();
+    initData();
 
-    // Refresh data every 10 seconds
-    const refreshInterval = setInterval(() => {
-      console.log('Refreshing NASA data...');
-      fetchData();
-    }, 10000);
+    // Set up individual refresh intervals based on actual API update frequencies
 
-    return () => clearInterval(refreshInterval);
+    // ISS Position - Every 1 second (real-time tracking)
+    const issInterval = setInterval(() => {
+      updateDataSource(
+        fetchISSPosition,
+        'ISS',
+        (data) => ({
+          iss_latitude: data.iss_latitude || 0,
+          iss_longitude: data.iss_longitude || 0,
+          iss_altitude: data.iss_altitude || 408,
+          iss_velocity: data.iss_velocity || 7.66
+        }),
+        'iss'
+      );
+    }, 1000); // 1 second
+
+    // Solar Activity - Every 1 minute (NOAA updates every 1-5 minutes)
+    const solarInterval = setInterval(() => {
+      updateDataSource(
+        fetchSolarActivity,
+        'Solar',
+        (data) => ({
+          solar_xray_flux: data.solar_xray_flux || 0,
+          solar_activity_level: data.solar_activity_level || 0
+        }),
+        'solar'
+      );
+    }, 60000); // 1 minute
+
+    // Earth Weather - Every 15 minutes
+    const earthInterval = setInterval(() => {
+      updateDataSource(
+        fetchEarthWeather,
+        'Earth Weather',
+        (data) => ({
+          earth_temp: data.earth_temp || 0,
+          earth_wind: data.earth_wind || 0,
+          earth_cloud_cover: data.earth_cloud_cover || 0,
+          earth_uv_index: data.earth_uv_index || 0
+        }),
+        'earth'
+      );
+    }, 900000); // 15 minutes
+
+    // Space Weather (DONKI) - Every 10 minutes (hourly data)
+    const donkiInterval = setInterval(() => {
+      updateDataSource(
+        fetchDONKI,
+        'DONKI',
+        (data) => ({
+          storm_kp: data.storm_kp || 0,
+          solar_wind_speed: data.solar_wind_speed || 300,
+          solar_wind_density: data.solar_wind_density || 5,
+          solar_wind_temp: data.solar_wind_temp || 100000
+        }),
+        'donki'
+      );
+    }, 600000); // 10 minutes
+
+    // EONET - Every 10 minutes (hourly data)
+    const eonetInterval = setInterval(() => {
+      updateDataSource(
+        fetchEONET,
+        'EONET',
+        (data) => ({
+          event_count: data.length || 0
+        }),
+        'eonet'
+      );
+    }, 600000); // 10 minutes
+
+    // NEOs - Every 2 hours (daily data)
+    const neoInterval = setInterval(() => {
+      updateDataSource(
+        fetchNeoWs,
+        'NEO',
+        (data) => ({
+          neo_count: data.neo_count || 0,
+          neo_velocity: (data.neo_velocity || 0) / 50000,
+          neo_distance: (data.neo_distance || 0) / 10000000,
+          neo_max_diameter: data.neo_max_diameter || 0,
+          neo_min_diameter: data.neo_min_diameter || 0,
+          neo_hazardous: data.neo_hazardous || 0
+        }),
+        'neo'
+      );
+    }, 7200000); // 2 hours
+
+    // Asteroids - Every 2 hours (daily data)
+    const asteroidsInterval = setInterval(() => {
+      updateDataSource(
+        fetchAsteroidApproaches,
+        'Asteroids',
+        (data) => ({
+          asteroid_approaches_7d: data.asteroid_approaches_7d || 0,
+          asteroid_closest_distance: data.asteroid_closest_distance || 0,
+          asteroid_fastest_velocity: data.asteroid_fastest_velocity || 0
+        }),
+        'asteroids'
+      );
+    }, 7200000); // 2 hours
+
+    // Exoplanets - Every 2 hours (daily data)
+    const exoInterval = setInterval(() => {
+      updateDataSource(
+        fetchExoplanets,
+        'Exoplanets',
+        (data) => ({
+          exo_count: data.exo_count || 5000,
+          exo_radius_avg: data.exo_radius_avg || 2,
+          exo_mass_avg: data.exo_mass_avg || 5,
+          exo_temp_avg: data.exo_temp_avg || 800,
+          exo_habitable: data.exo_habitable || 50
+        }),
+        'exoplanets'
+      );
+    }, 7200000); // 2 hours
+
+    // TLE - Every 2 hours (daily data)
+    const tleInterval = setInterval(() => {
+      updateDataSource(
+        fetchTLE,
+        'TLE',
+        (data) => ({
+          tle_count: data.length || 0
+        }),
+        'satellites'
+      );
+    }, 7200000); // 2 hours
+
+    // Cleanup all intervals
+    return () => {
+      clearInterval(issInterval);
+      clearInterval(solarInterval);
+      clearInterval(earthInterval);
+      clearInterval(donkiInterval);
+      clearInterval(eonetInterval);
+      clearInterval(neoInterval);
+      clearInterval(asteroidsInterval);
+      clearInterval(exoInterval);
+      clearInterval(tleInterval);
+    };
   }, []);
 
   // --- REAL-TIME AUDIO UPDATE ---
