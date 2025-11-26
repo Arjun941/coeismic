@@ -109,18 +109,83 @@ export const fetchDONKI = async () => {
     console.error('Error fetching DONKI:', error);
     return null;
   }
-}
+};
 
-export const fetchInsight = async () => {
+export const fetchEarthWeather = async () => {
   try {
-    // Mars Weather (Mocked as InSight is ended)
+    // Get weather at NASA HQ (Washington DC) as a reference point
+    const response = await axios.get('https://api.open-meteo.com/v1/forecast', {
+      params: {
+        latitude: 38.8833,
+        longitude: -77.0167,
+        current: 'temperature_2m,wind_speed_10m,cloud_cover,uv_index',
+        temperature_unit: 'celsius',
+        wind_speed_unit: 'ms'
+      }
+    });
+
+    const current = response.data.current;
     return {
-      wind: 5 + Math.random() * 10,
-      pressure: 700 + Math.random() * 50,
-      temp: -60 + Math.random() * 20
+      earth_temp: current.temperature_2m || 20,
+      earth_wind: current.wind_speed_10m || 5,
+      earth_cloud_cover: current.cloud_cover || 50,
+      earth_uv_index: current.uv_index || 3
     };
   } catch (error) {
-    return { wind: 5, pressure: 700, temp: -60 };
+    console.error('Error fetching Earth weather:', error);
+    return {
+      earth_temp: 20,
+      earth_wind: 5,
+      earth_cloud_cover: 50,
+      earth_uv_index: 3
+    };
+  }
+};
+
+// NEW: Asteroid Close Approaches (next 7 days)
+export const fetchAsteroidApproaches = async () => {
+  try {
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = nextWeek.toISOString().split('T')[0];
+
+    const response = await api.get('/neo/rest/v1/feed', {
+      params: {
+        start_date: startDate,
+        end_date: endDate
+      }
+    });
+
+    let closestDistance = Infinity;
+    let fastestVelocity = 0;
+    let totalApproaches = 0;
+
+    Object.values(response.data.near_earth_objects).forEach(dayNeos => {
+      dayNeos.forEach(neo => {
+        totalApproaches++;
+        const distance = parseFloat(neo.close_approach_data[0].miss_distance.kilometers);
+        const velocity = parseFloat(neo.close_approach_data[0].relative_velocity.kilometers_per_hour);
+
+        if (distance < closestDistance) closestDistance = distance;
+        if (velocity > fastestVelocity) fastestVelocity = velocity;
+      });
+    });
+
+    return {
+      asteroid_approaches_7d: totalApproaches,
+      asteroid_closest_distance: closestDistance === Infinity ? 0 : closestDistance / 384400, // In lunar distances
+      asteroid_fastest_velocity: fastestVelocity / 1000 // km/s
+    };
+  } catch (error) {
+    console.error('Error fetching asteroid approaches:', error);
+    return {
+      asteroid_approaches_7d: 0,
+      asteroid_closest_distance: 0,
+      asteroid_fastest_velocity: 0
+    };
   }
 };
 
@@ -135,36 +200,96 @@ export const fetchEONET = async () => {
   }
 };
 
-export const fetchEPIC = async () => {
+// ISS Real-Time Position
+export const fetchISSPosition = async () => {
   try {
-    const response = await api.get('/EPIC/api/natural');
-    return response.data;
+    const response = await axios.get('http://api.open-notify.org/iss-now.json');
+    const { latitude, longitude } = response.data.iss_position;
+
+    return {
+      iss_latitude: parseFloat(latitude),
+      iss_longitude: parseFloat(longitude),
+      iss_altitude: 408, // ISS orbits at ~408km
+      iss_velocity: 7.66 // km/s orbital velocity
+    };
   } catch (error) {
-    return [];
+    console.error('Error fetching ISS position:', error);
+    return {
+      iss_latitude: 0,
+      iss_longitude: 0,
+      iss_altitude: 408,
+      iss_velocity: 7.66
+    };
   }
 };
 
-export const fetchTechTransfer = async () => {
+// Real Solar Activity from NOAA
+export const fetchSolarActivity = async () => {
   try {
-    const response = await api.get('/techtransfer/patent/');
-    return response.data;
+    // NOAA Space Weather Prediction Center - Real-time solar data
+    const response = await axios.get('https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json');
+
+    // Get latest X-ray flux reading
+    const latest = response.data[response.data.length - 1];
+    const xrayFlux = parseFloat(latest.flux);
+
+    // Convert flux to a usable metric (log scale)
+    const solarActivity = Math.log10(xrayFlux * 1e8); // Normalized
+
+    return {
+      solar_xray_flux: xrayFlux,
+      solar_activity_level: Math.max(0, Math.min(10, solarActivity)),
+      solar_flare_intensity: xrayFlux > 1e-5 ? 'High' : xrayFlux > 1e-6 ? 'Medium' : 'Low'
+    };
   } catch (error) {
-    return { count: 0 };
+    console.error('Error fetching solar activity:', error);
+    return {
+      solar_xray_flux: 1e-7,
+      solar_activity_level: 3,
+      solar_flare_intensity: 'Low'
+    };
   }
 };
 
 export const fetchExoplanets = async () => {
   try {
-    // Mocking detailed exoplanet stats
+    // NASA Exoplanet Archive - Real confirmed count
+    const response = await axios.get('https://exoplanetarchive.ipac.caltech.edu/TAP/sync', {
+      params: {
+        query: 'select count(*) as count from ps where default_flag=1',
+        format: 'json'
+      }
+    });
+
+    const count = response.data[0]?.count || 5500;
+
+    // Get sample statistics
+    const statsResponse = await axios.get('https://exoplanetarchive.ipac.caltech.edu/TAP/sync', {
+      params: {
+        query: 'select avg(pl_rade) as avg_radius, avg(pl_bmasse) as avg_mass, avg(pl_eqt) as avg_temp from ps where default_flag=1 and pl_rade is not null and pl_bmasse is not null',
+        format: 'json'
+      }
+    });
+
+    const stats = statsResponse.data[0] || {};
+
     return {
-      exo_count: 5500,
-      exo_radius_avg: 2.5, // Earth Radii
-      exo_mass_avg: 5.0, // Earth Masses
-      exo_temp_avg: 800, // Kelvin
-      exo_habitable: 50 // Count
+      exo_count: count,
+      exo_radius_avg: stats.avg_radius || 2.5,
+      exo_mass_avg: stats.avg_mass || 5.0,
+      exo_temp_avg: stats.avg_temp || 800,
+      exo_habitable: Math.floor(count * 0.01) // Estimate ~1% potentially habitable
     };
   } catch (error) {
-    return { exo_count: 5000 };
+    console.error('Error fetching exoplanet data:', error);
+    // Fallback to known count
+    return {
+      exo_count: 5500,
+      exo_radius_avg: 2.5,
+      exo_mass_avg: 5.0,
+      exo_temp_avg: 800,
+      exo_habitable: 55
+    };
   }
 };
 

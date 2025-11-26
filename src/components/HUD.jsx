@@ -3,13 +3,38 @@ import { Activity, Radio, Wind, Zap, Globe, Satellite, AlertTriangle, Play, Squa
 import Graph from './Graph';
 import AudioSpectrum from './AudioSpectrum';
 
-export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audioState }) {
+export default function HUD({ telemetry, history, lastUpdated, isPlaying, onTogglePlay, audioState }) {
     const [logs, setLogs] = useState([]);
     const [hoveredKey, setHoveredKey] = useState(null);
     const [selectedInfoKey, setSelectedInfoKey] = useState(null);
     const [showHelp, setShowHelp] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const logEndRef = useRef(null);
+
+    // Helper function to format relative time
+    const getRelativeTime = (timestamp) => {
+        if (!timestamp) return 'Never';
+        const seconds = Math.floor((new Date() - timestamp) / 1000);
+        if (seconds < 10) return 'Just now';
+        if (seconds < 60) return `${seconds}s ago`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        return `${hours}h ago`;
+    };
+
+    // Map telemetry keys to data sources
+    const dataSourceMap = {
+        neo_count: 'neo', neo_velocity: 'neo', neo_distance: 'neo', neo_max_diameter: 'neo', neo_min_diameter: 'neo', neo_hazardous: 'neo',
+        asteroid_approaches_7d: 'asteroids', asteroid_closest_distance: 'asteroids', asteroid_fastest_velocity: 'asteroids',
+        solar_xray_flux: 'solar', solar_activity_level: 'solar',
+        storm_kp: 'donki', solar_wind_speed: 'donki', solar_wind_density: 'donki', solar_wind_temp: 'donki',
+        iss_latitude: 'iss', iss_longitude: 'iss', iss_altitude: 'iss', iss_velocity: 'iss',
+        earth_temp: 'earth', earth_wind: 'earth', earth_cloud_cover: 'earth', earth_uv_index: 'earth',
+        exo_count: 'exoplanets', exo_radius_avg: 'exoplanets', exo_mass_avg: 'exoplanets', exo_temp_avg: 'exoplanets', exo_habitable: 'exoplanets',
+        event_count: 'eonet',
+        tle_count: 'satellites'
+    };
 
     const telemetryDescriptions = {
         neo_count: "Total count of Near-Earth Objects currently being tracked.",
@@ -22,18 +47,26 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
         solar_wind_speed: "Speed of solar wind particles (km/s).",
         solar_wind_density: "Density of solar wind plasma (protons/cm³).",
         solar_wind_temp: "Temperature of solar wind plasma (Kelvin).",
-        exo_count: "Total confirmed exoplanets in the Archive.",
+        solar_xray_flux: "Real-time solar X-ray flux from NOAA GOES satellites.",
+        solar_activity_level: "Solar activity level (0-10 scale) based on X-ray emissions.",
+        exo_count: "Total confirmed exoplanets in the NASA Exoplanet Archive.",
         exo_radius_avg: "Average radius of exoplanets (Earth radii).",
         exo_mass_avg: "Average mass of exoplanets (Earth masses).",
         exo_temp_avg: "Average equilibrium temperature (Kelvin).",
-        exo_gravity_avg: "Average surface gravity (Earth Gs).",
+        exo_habitable: "Estimated number of potentially habitable exoplanets.",
         tle_count: "Active satellites tracked via Two-Line Elements.",
-        mars_temp: "Average surface temperature on Mars (Sol data).",
-        mars_pressure: "Atmospheric pressure on Mars (Pascals).",
-        mars_wind: "Average wind speed on Mars (m/s).",
-
-        event_count: "Active natural events tracked by EONET.",
-        exo_habitable: "Estimated number of potentially habitable exoplanets."
+        iss_latitude: "International Space Station current latitude (degrees).",
+        iss_longitude: "International Space Station current longitude (degrees).",
+        iss_altitude: "ISS orbital altitude above Earth (km).",
+        iss_velocity: "ISS orbital velocity (km/s).",
+        earth_temp: "Current temperature at NASA HQ, Washington DC (°C).",
+        earth_wind: "Wind speed at NASA HQ (m/s).",
+        earth_cloud_cover: "Cloud cover percentage at NASA HQ (%).",
+        earth_uv_index: "UV index at NASA HQ (0-11 scale).",
+        asteroid_approaches_7d: "Total asteroid close approaches in next 7 days.",
+        asteroid_closest_distance: "Closest asteroid approach distance (lunar distances).",
+        asteroid_fastest_velocity: "Fastest asteroid velocity in next 7 days (km/s).",
+        event_count: "Active natural events tracked by EONET (wildfires, storms, etc.)."
     };
 
     // Handle Resize
@@ -191,187 +224,210 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', borderBottom: '1px solid rgba(0, 240, 255, 0.2)', paddingBottom: '5px' }}>TELEMETRY ({Object.keys(telemetry).length})</h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px', paddingBottom: '10px' }}>
-                    {Object.keys(telemetry).map(key => (
-                        <div
-                            key={key}
-                            onMouseEnter={() => setHoveredKey(key)}
-                            onMouseLeave={() => setHoveredKey(null)}
-                            style={{ position: 'relative', cursor: 'crosshair' }}
-                        >
-                            <Graph
-                                data={history[key] || []}
-                                label={formatLabel(key)}
-                                color={key.includes('hazardous') || key.includes('storm') ? '#ff003c' : '#00f0ff'}
-                                min={0}
-                                max={Math.max(...(history[key] || [100])) * 1.2}
-                            />
-                            {(hoveredKey === key || isMobile) && ( // Always show button on mobile if needed, or rely on tap
-                                <button
-                                    onClick={() => setSelectedInfoKey(key)}
-                                    style={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        background: 'rgba(0, 10, 20, 0.9)',
-                                        border: '1px solid #00f0ff',
-                                        color: '#00f0ff',
-                                        padding: '5px 10px',
-                                        fontSize: '10px',
-                                        fontFamily: '"Orbitron", sans-serif',
-                                        cursor: 'pointer',
-                                        zIndex: 10,
-                                        opacity: isMobile ? 0.8 : 1 // Less intrusive on mobile
-                                    }}
-                                >
-                                    KNOW MORE
-                                </button>
-                            )}
-                        </div>
-                    ))}
+                    {Object.keys(telemetry).map(key => {
+                        const dataSource = dataSourceMap[key];
+                        const timestamp = lastUpdated[dataSource];
+
+                        return (
+                            <div
+                                key={key}
+                                onMouseEnter={() => setHoveredKey(key)}
+                                onMouseLeave={() => setHoveredKey(null)}
+                                style={{ position: 'relative', cursor: 'crosshair' }}
+                            >
+                                <Graph
+                                    data={history[key] || []}
+                                    label={formatLabel(key)}
+                                    color={key.includes('hazardous') || key.includes('storm') ? '#ff003c' : '#00f0ff'}
+                                    min={0}
+                                    max={Math.max(...(history[key] || [100])) * 1.2}
+                                />
+                                {/* Timestamp overlay */}
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: '2px',
+                                    right: '2px',
+                                    fontSize: '8px',
+                                    color: 'rgba(0, 240, 255, 0.5)',
+                                    background: 'rgba(0, 0, 0, 0.7)',
+                                    padding: '1px 3px',
+                                    borderRadius: '2px',
+                                    pointerEvents: 'none'
+                                }}>
+                                    {getRelativeTime(timestamp)}
+                                </div>
+                                {(hoveredKey === key || isMobile) && (
+                                    <button
+                                        onClick={() => setSelectedInfoKey(key)}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            background: 'rgba(0, 10, 20, 0.9)',
+                                            border: '1px solid #00f0ff',
+                                            color: '#00f0ff',
+                                            padding: '5px 10px',
+                                            fontSize: '10px',
+                                            fontFamily: '"Orbitron", sans-serif',
+                                            cursor: 'pointer',
+                                            zIndex: 10,
+                                            opacity: isMobile ? 0.8 : 1
+                                        }}
+                                    >
+                                        KNOW MORE
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* --- INFO MODAL --- */}
-            {selectedInfoKey && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: '100vh',
-                    background: 'rgba(0, 0, 0, 0.8)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 100,
-                    backdropFilter: 'blur(5px)',
-                    pointerEvents: 'auto'
-                }}>
+            {
+                selectedInfoKey && (
                     <div style={{
-                        width: isMobile ? '90%' : '400px',
-                        background: 'rgba(0, 10, 20, 0.95)',
-                        border: '1px solid #00f0ff',
-                        padding: '20px',
-                        boxShadow: '0 0 20px rgba(0, 240, 255, 0.2)',
-                        position: 'relative'
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        background: 'rgba(0, 0, 0, 0.8)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 100,
+                        backdropFilter: 'blur(5px)',
+                        pointerEvents: 'auto'
                     }}>
-                        <button
-                            onClick={() => setSelectedInfoKey(null)}
-                            style={{
-                                position: 'absolute',
-                                top: '10px',
-                                right: '10px',
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#ff003c',
-                                cursor: 'pointer',
-                                fontFamily: 'monospace',
-                                fontSize: '16px'
-                            }}
-                        >
-                            [X]
-                        </button>
+                        <div style={{
+                            width: isMobile ? '90%' : '400px',
+                            background: 'rgba(0, 10, 20, 0.95)',
+                            border: '1px solid #00f0ff',
+                            padding: '20px',
+                            boxShadow: '0 0 20px rgba(0, 240, 255, 0.2)',
+                            position: 'relative'
+                        }}>
+                            <button
+                                onClick={() => setSelectedInfoKey(null)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '10px',
+                                    right: '10px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#ff003c',
+                                    cursor: 'pointer',
+                                    fontFamily: 'monospace',
+                                    fontSize: '16px'
+                                }}
+                            >
+                                [X]
+                            </button>
 
-                        <h2 style={{ margin: '0 0 10px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff', fontSize: isMobile ? '18px' : '24px' }}>
-                            {formatLabel(selectedInfoKey)}
-                        </h2>
+                            <h2 style={{ margin: '0 0 10px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff', fontSize: isMobile ? '18px' : '24px' }}>
+                                {formatLabel(selectedInfoKey)}
+                            </h2>
 
-                        <div style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.3)', marginBottom: '15px' }}></div>
+                            <div style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.3)', marginBottom: '15px' }}></div>
 
-                        <p style={{ fontSize: '14px', lineHeight: '1.5', color: '#ffffff', marginBottom: '20px' }}>
-                            {telemetryDescriptions[selectedInfoKey]}
-                        </p>
+                            <p style={{ fontSize: '14px', lineHeight: '1.5', color: '#ffffff', marginBottom: '20px' }}>
+                                {telemetryDescriptions[selectedInfoKey]}
+                            </p>
 
-                        <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '10px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
-                            <div style={{ fontSize: '10px', color: 'rgba(0, 240, 255, 0.7)' }}>CURRENT VALUE</div>
-                            <div style={{ fontSize: '24px', fontFamily: 'monospace', color: '#ffffff' }}>
-                                {telemetry[selectedInfoKey]?.toFixed(2) || '0.00'}
+                            <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '10px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                                <div style={{ fontSize: '10px', color: 'rgba(0, 240, 255, 0.7)' }}>CURRENT VALUE</div>
+                                <div style={{ fontSize: '24px', fontFamily: 'monospace', color: '#ffffff' }}>
+                                    {telemetry[selectedInfoKey]?.toFixed(2) || '0.00'}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* --- HELP MODAL --- */}
-            {showHelp && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: '100vh',
-                    background: 'rgba(0, 0, 0, 0.9)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 200,
-                    backdropFilter: 'blur(10px)',
-                    pointerEvents: 'auto'
-                }}>
+            {
+                showHelp && (
                     <div style={{
-                        width: isMobile ? '90%' : '600px',
-                        maxHeight: '90vh',
-                        overflowY: 'auto',
-                        background: 'rgba(0, 10, 20, 0.95)',
-                        border: '1px solid #00f0ff',
-                        padding: '40px',
-                        boxShadow: '0 0 30px rgba(0, 240, 255, 0.1)',
-                        position: 'relative',
-                        fontFamily: '"Rajdhani", sans-serif'
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        background: 'rgba(0, 0, 0, 0.9)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 200,
+                        backdropFilter: 'blur(10px)',
+                        pointerEvents: 'auto'
                     }}>
-                        <button
-                            onClick={() => setShowHelp(false)}
-                            style={{
-                                position: 'absolute',
-                                top: '20px',
-                                right: '20px',
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#ff003c',
-                                cursor: 'pointer',
-                                fontFamily: 'monospace',
-                                fontSize: '20px'
-                            }}
-                        >
-                            [CLOSE]
-                        </button>
+                        <div style={{
+                            width: isMobile ? '90%' : '600px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            background: 'rgba(0, 10, 20, 0.95)',
+                            border: '1px solid #00f0ff',
+                            padding: '40px',
+                            boxShadow: '0 0 30px rgba(0, 240, 255, 0.1)',
+                            position: 'relative',
+                            fontFamily: '"Rajdhani", sans-serif'
+                        }}>
+                            <button
+                                onClick={() => setShowHelp(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '20px',
+                                    right: '20px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#ff003c',
+                                    cursor: 'pointer',
+                                    fontFamily: 'monospace',
+                                    fontSize: '20px'
+                                }}
+                            >
+                                [CLOSE]
+                            </button>
 
-                        <h1 style={{ margin: '0 0 20px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff', fontSize: '24px', letterSpacing: '4px', borderBottom: '1px solid rgba(0, 240, 255, 0.3)', paddingBottom: '10px' }}>
-                            MISSION BRIEFING
-                        </h1>
+                            <h1 style={{ margin: '0 0 20px 0', fontFamily: '"Orbitron", sans-serif', color: '#00f0ff', fontSize: '24px', letterSpacing: '4px', borderBottom: '1px solid rgba(0, 240, 255, 0.3)', paddingBottom: '10px' }}>
+                                MISSION BRIEFING
+                            </h1>
 
-                        <div style={{ color: '#ffffff', fontSize: '16px', lineHeight: '1.6' }}>
-                            <p><strong>SYSTEM STATUS:</strong> You are listening to the sound of space.</p>
+                            <div style={{ color: '#ffffff', fontSize: '16px', lineHeight: '1.6' }}>
+                                <p><strong>SYSTEM STATUS:</strong> You are listening to the sound of space.</p>
 
-                            <p>This terminal connects to live NASA APIs to generate a real-time audio-visual soundscape. Every sound you hear is driven by actual data:</p>
+                                <p>This terminal connects to live NASA APIs to generate a real-time audio-visual soundscape. Every sound you hear is driven by actual data:</p>
 
-                            <ul style={{ listStyle: 'none', padding: 0, margin: '20px 0' }}>
-                                <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ color: '#00f0ff' }}>■</span>
-                                    <span><strong>Asteroids (NEOs)</strong> control the bass frequencies and rhythm.</span>
-                                </li>
-                                <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ color: '#00f0ff' }}>■</span>
-                                    <span><strong>Solar Wind</strong> modulates the ethereal pads and harmonies.</span>
-                                </li>
-                                <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ color: '#00f0ff' }}>■</span>
-                                    <span><strong>Exoplanet Discoveries</strong> trigger melodic chimes.</span>
-                                </li>
-                                <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ color: '#ff003c' }}>■</span>
-                                    <span><strong>Hazardous Objects</strong> create warning pulses.</span>
-                                </li>
-                            </ul>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: '20px 0' }}>
+                                    <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ color: '#00f0ff' }}>■</span>
+                                        <span><strong>Asteroids (NEOs)</strong> control the bass frequencies and rhythm.</span>
+                                    </li>
+                                    <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ color: '#00f0ff' }}>■</span>
+                                        <span><strong>Solar Wind</strong> modulates the ethereal pads and harmonies.</span>
+                                    </li>
+                                    <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ color: '#00f0ff' }}>■</span>
+                                        <span><strong>Exoplanet Discoveries</strong> trigger melodic chimes.</span>
+                                    </li>
+                                    <li style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ color: '#ff003c' }}>■</span>
+                                        <span><strong>Hazardous Objects</strong> create warning pulses.</span>
+                                    </li>
+                                </ul>
 
-                            <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)', borderTop: '1px solid rgba(0, 240, 255, 0.2)', paddingTop: '20px' }}>
-                                <em>"Space is not silent. It is just waiting to be heard."</em>
-                            </p>
+                                <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)', borderTop: '1px solid rgba(0, 240, 255, 0.2)', paddingTop: '20px' }}>
+                                    <em>"Space is not silent. It is just waiting to be heard."</em>
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* --- BOTTOM BAR: CONTROLS --- */}
             <div style={{
@@ -408,6 +464,6 @@ export default function HUD({ telemetry, history, isPlaying, onTogglePlay, audio
                     {isPlaying ? 'TERMINATE UPLINK' : 'INITIATE UPLINK'}
                 </button>
             </div>
-        </div>
+        </div >
     );
 }
