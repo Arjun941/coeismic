@@ -179,65 +179,12 @@ function App() {
     return () => clearInterval(refreshInterval);
   }, []);
 
-  // --- REAL-TIME AUDIO UPDATE WITH DETERMINISTIC OSCILLATIONS ---
+  // --- REAL-TIME AUDIO UPDATE ---
+  // Update audio engine with current telemetry data (no oscillations)
   useEffect(() => {
     if (!isPlaying) return;
 
     const interval = setInterval(() => {
-      setTelemetry(prev => {
-        const oscillated = { ...prev };
-
-        // Use time-based deterministic oscillations (sine waves)
-        // All devices will show the same variations at the same time
-        const now = Date.now() / 1000; // Current time in seconds
-
-        // Different frequencies for different data types (in Hz)
-        const slowWave = Math.sin(now * 0.1); // 0.1 Hz - 10 second period
-        const mediumWave = Math.sin(now * 0.2); // 0.2 Hz - 5 second period
-        const fastWave = Math.sin(now * 0.5); // 0.5 Hz - 2 second period
-        const verySlowWave = Math.sin(now * 0.05); // 0.05 Hz - 20 second period
-
-        // ISS Position - slow orbital variations
-        oscillated.iss_latitude = prev.iss_latitude + slowWave * 0.05; // ±0.05°
-        oscillated.iss_longitude = prev.iss_longitude + slowWave * 0.1; // ±0.1°
-
-        // Earth Weather - natural medium-speed variations
-        oscillated.earth_temp = prev.earth_temp + mediumWave * 0.15; // ±0.15°C
-        oscillated.earth_wind = Math.max(0, prev.earth_wind + mediumWave * 0.25); // ±0.25 m/s
-        oscillated.earth_cloud_cover = Math.max(0, Math.min(100, prev.earth_cloud_cover + slowWave * 1)); // ±1%
-        oscillated.earth_uv_index = Math.max(0, prev.earth_uv_index + verySlowWave * 0.1); // ±0.1
-
-        // Solar Activity - fast fluctuations
-        oscillated.solar_xray_flux = Math.max(0, prev.solar_xray_flux * (1 + fastWave * 0.025)); // ±2.5%
-        oscillated.solar_activity_level = Math.max(0, Math.min(10, prev.solar_activity_level + fastWave * 0.15)); // ±0.15
-        oscillated.solar_wind_speed = Math.max(250, prev.solar_wind_speed + fastWave * 5); // ±5 km/s
-        oscillated.solar_wind_density = Math.max(0, prev.solar_wind_density + mediumWave * 0.25); // ±0.25 p/cm³
-        oscillated.solar_wind_temp = Math.max(0, prev.solar_wind_temp + fastWave * 2500); // ±2500 K
-
-        // NEO data - slow measurement variations
-        oscillated.neo_velocity = Math.max(0, prev.neo_velocity * (1 + verySlowWave * 0.01)); // ±1%
-        oscillated.neo_distance = Math.max(0, prev.neo_distance * (1 + verySlowWave * 0.01)); // ±1%
-        oscillated.neo_max_diameter = Math.max(0, prev.neo_max_diameter * (1 + verySlowWave * 0.005)); // ±0.5%
-        oscillated.neo_min_diameter = Math.max(0, prev.neo_min_diameter * (1 + verySlowWave * 0.005)); // ±0.5%
-
-        // Asteroid approaches - slow variations
-        oscillated.asteroid_closest_distance = Math.max(0, prev.asteroid_closest_distance + verySlowWave * 0.005); // ±0.005 LD
-        oscillated.asteroid_fastest_velocity = Math.max(0, prev.asteroid_fastest_velocity + slowWave * 0.25); // ±0.25 km/s
-
-        // Storm KP - medium fluctuations
-        oscillated.storm_kp = Math.max(0, Math.min(9, prev.storm_kp + mediumWave * 0.1)); // ±0.1
-
-        // Exoplanet stats - very slow, tiny variations
-        oscillated.exo_radius_avg = Math.max(0, prev.exo_radius_avg + verySlowWave * 0.005); // ±0.005
-        oscillated.exo_mass_avg = Math.max(0, prev.exo_mass_avg + verySlowWave * 0.01); // ±0.01
-        oscillated.exo_temp_avg = Math.max(0, prev.exo_temp_avg + verySlowWave * 2.5); // ±2.5 K
-
-        // Integer counts stay as integers (no oscillation, they change on API refresh)
-        // neo_count, neo_hazardous, exo_count, exo_habitable, tle_count, event_count, asteroid_approaches_7d
-
-        return oscillated;
-      });
-
       // Update history for graphs
       setHistory(prev => {
         const nextHist = { ...prev };
