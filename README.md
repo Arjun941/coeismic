@@ -1,3 +1,5 @@
+<img width="1273" height="594" alt="image" src="https://github.com/user-attachments/assets/eb982b47-b866-4c1c-8386-ab9098a8e19e" />
+
 # Coeismic 🛰️🎧
 
 **Turns real NASA data into music. Literally.**
